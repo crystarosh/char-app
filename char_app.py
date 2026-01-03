@@ -185,17 +185,27 @@ def verify_admin():
     # 1. Get Input
     pw_input = st.session_state.get("global_admin_pw", "")
     
-    # 2. Get Secret (Robust check for nested or root)
+    # 2. Get Secret (Deep Search)
     secret_pw = st.secrets.get("app_password")
     if not secret_pw:
-        # Check if inside gcp_service_account (common mistake)
-        gcp = st.secrets.get("gcp_service_account")
-        if gcp and isinstance(gcp, dict):
-            secret_pw = gcp.get("app_password")
-            
+        # Search in all top-level sections
+        for key in st.secrets:
+            val = st.secrets[key]
+            # Check if it's a dict/AttrDict and contains app_password
+            # Streamlit secrets are dict-like.
+            try:
+                if isinstance(val, (dict, type(st.secrets))) or hasattr(val, 'get'):
+                    if "app_password" in val:
+                         secret_pw = val["app_password"]
+                         break
+            except:
+                pass
+
     # 3. Verify
     if not secret_pw:
-        st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。")
+        # Debug: Show available keys to help user
+        keys_str = ", ".join(list(st.secrets.keys()))
+        st.error(f"⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。(検出されたキー: {keys_str})")
         return False
         
     if pw_input == secret_pw:
@@ -1968,6 +1978,10 @@ def main():
                     except:
                          pass
             st.rerun()
+
+    if st.sidebar.button("🤝 人間関係", type="primary", use_container_width=True):
+        st.session_state.view_mode = 'relation'
+        st.rerun()
 
     # Routing
     # We use session_state.view_mode as primary router
