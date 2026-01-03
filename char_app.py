@@ -714,19 +714,7 @@ def render_list_page(manager):
                          target_img = get_safe_image(raw_img_path)
                          
                          if target_img:
-                             try:
-                                 from PIL import Image as PILImage
-                                 # Open and resize for icon
-                                 img_obj = PILImage.open(target_img)
-                                 # Crop to square center
-                                 w, h = img_obj.size
-                                 min_dim = min(w, h)
-                                 left = (w - min_dim)/2
-                                 top = (h - min_dim)/2
-                                 img_obj = img_obj.crop((left, top, left+min_dim, top+min_dim))
-                                 st.image(img_obj, use_container_width=True)
-                             except:
-                                 st.empty() # Fail silently on corrupt image
+                             st.image(target_img, use_container_width=True)
                          else:
                              # Placeholder
                              st.markdown(f"""
