@@ -689,21 +689,16 @@ def render_list_page(manager):
     if 'selected_char_id' not in st.session_state:
         st.session_state.selected_char_id = None
         
+    # check if editing (which might have been set from detail view)
+    if st.session_state.get('editing_char_id'):
+         render_register_page(manager, st.session_state.editing_char_id)
+         return
+
     # --- Security Input (Duplicated for List View) ---
     st.sidebar.markdown("### 🔒 セキュリティ")
     input_pw_list = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
 
     def verify_password_list():
-        if "app_password" not in st.secrets:
-            return True
-        if input_pw_list == st.secrets["app_password"]:
-            return True
-        return False
-
-    # check if editing (which might have been set from detail view)
-    if st.session_state.get('editing_char_id'):
-         render_register_page(manager, st.session_state.editing_char_id)
-         return
 
     # --- LIST MODE ---
     if st.session_state.view_mode == 'list':
