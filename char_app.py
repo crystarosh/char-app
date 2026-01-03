@@ -10,6 +10,27 @@ import base64
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from PIL import Image, ImageDraw, ImageFont
+import re
+
+def normalize_path(path):
+    if not path: return None
+    # Replace backslashes with forward slashes for cross-platform compatibility
+    return path.replace("\\", "/")
+
+def get_safe_image(img_path):
+    if not img_path: return None
+    norm_path = normalize_path(img_path)
+    if os.path.exists(norm_path):
+        return norm_path
+    
+    # If the exact path doesn't exist, try looking in 'images/' just in case
+    # This helps if the DB says 'images\foo.jpg' but we are on Linux
+    basename = os.path.basename(norm_path)
+    alt_path = os.path.join("images", basename)
+    if os.path.exists(alt_path):
+        return alt_path
+        
+    return None
 
 # --- Configuration ---
 DATA_DIR = "data"
@@ -136,7 +157,8 @@ class CharacterManager:
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
             
-        return file_path
+        # Return logical path with forward slashes for DB consistency
+        return file_path.replace("\\", "/")
 
     def get_character(self, char_id):
         for char in self.characters:
@@ -641,24 +663,31 @@ def render_list_page(manager):
                 cols = st.columns(5)
                 for i, char in enumerate(manager.characters):
                     with cols[i % 5]:
-                         target_img = char['images'][0] if (char['images'] and char['images'][0]) else None
+                         raw_img_path = char['images'][0] if (char['images'] and char['images'][0]) else None
+                         target_img = get_safe_image(raw_img_path)
+                         
                          if target_img:
                              try:
                                  from PIL import Image as PILImage
-                                 p_img = PILImage.open(target_img)
-                                 min_d = min(p_img.size)
-                                 cw, ch = p_img.size
-                                 left = (cw - min_d) / 2
-                                 top = (ch - min_d) / 2
-                                 right = (cw + min_d) / 2
-                                 bottom = (ch + min_d) / 2
-                                 crop_img = p_img.crop((left, top, right, bottom))
-                                 st.image(crop_img, use_container_width=True)
+                                 # Open and resize for icon
+                                 img_obj = PILImage.open(target_img)
+                                 # Crop to square center
+                                 w, h = img_obj.size
+                                 min_dim = min(w, h)
+                                 left = (w - min_dim)/2
+                                 top = (h - min_dim)/2
+                                 img_obj = img_obj.crop((left, top, left+min_dim, top+min_dim))
+                                 st.image(img_obj, use_container_width=True)
                              except:
-                                 st.image(target_img, use_container_width=True)
+                                 st.empty() # Fail silently on corrupt image
                          else:
-                             st.markdown('<div style="aspect-ratio:1/1; background:#eee;"></div>', unsafe_allow_html=True)
-                         
+                             # Placeholder
+                             st.markdown(f"""
+                             <div style='background-color:#ccc; height:100px; display:flex; align-items:center; justify-content:center; color:#666;'>
+                             No Image
+                             </div>
+                             """, unsafe_allow_html=True)
+                             
                          disp_name = char.get('first_name', char['name'])
                          if st.button(disp_name, key=f"sel_{char['id']}", use_container_width=True):
                              st.session_state.selected_char_id = char['id']
@@ -778,15 +807,18 @@ def render_list_page(manager):
         
         with col_main:
             # Main Image
-            if char['images'] and char['images'][0]:
-                st.image(char['images'][0], use_container_width=True)
+            main_img_path = get_safe_image(char['images'][0] if (char['images'] and char['images'][0]) else None)
+            if main_img_path:
+                st.image(main_img_path, use_container_width=True)
+            else:
+                 st.info("画像が見つかりません (クラウド上では画像は一時ファイルのため消えることがあります)")
 
             # Sub Images Gallery with Viewer Mode
             if len(char['images']) > 1:
                 st.markdown("##### <span style='color:#bbb'>⚜</span> ギャラリー", unsafe_allow_html=True)
                 cols_sub = st.columns(3)
-                cols_sub = st.columns(3)
-                for i, img_path in enumerate(char['images'][1:]):
+                for i, raw_path in enumerate(char['images'][1:]):
+                    img_path = get_safe_image(raw_path)
                     with cols_sub[i % 3]:
                         # Make thumbnail clickable to simple expander?
                         # Streamlit image click -> fullscreen is default.
@@ -795,10 +827,12 @@ def render_list_page(manager):
                         # We can use a button "🔍" under each image to open a modal-like view.
                         if img_path:
                             st.image(img_path, use_container_width=True)
-                        if st.button("拡大", key=f"view_{i}"):
-                            st.session_state.view_mode = 'image_view'
-                            st.session_state.view_img_path = img_path
-                            st.rerun()
+                            if st.button("拡大", key=f"view_{i}"):
+                                st.session_state.view_mode = 'image_view'
+                                st.session_state.view_img_path = img_path
+                                st.rerun()
+                        else:
+                             st.markdown("<div style='font-size:0.8em; color:#999'>No Img</div>", unsafe_allow_html=True)
 
         with col_info:
             # Basic Stats
