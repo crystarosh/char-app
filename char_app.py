@@ -223,8 +223,11 @@ def render_register_page(manager, edit_char_id=None):
         if "app_password" not in st.secrets:
             st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。") 
             return False
+            
         if input_pw == st.secrets["app_password"]:
             return True
+            
+        st.error("パスワードが間違っています。")
         return False
 
     st.markdown(f"### <span style='color:#bbb'>⚜</span> {title}", unsafe_allow_html=True)
@@ -533,7 +536,6 @@ def render_register_page(manager, edit_char_id=None):
     
     if submitted:
         if not verify_password():
-            st.error("パスワードが間違っています。保存できません。")
             return
             
         if not first_name_in:
@@ -702,6 +704,8 @@ def render_list_page(manager):
             
         if input_pw_list == st.secrets["app_password"]:
             return True
+            
+        st.error("パスワードが間違っています。")
         return False
 
     # --- LIST MODE ---
@@ -1080,15 +1084,14 @@ def render_list_page(manager):
                         with st.spinner("生成中..."):
                             zip_data = generate_card_zip(char, manager)
                             st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
-                    else:
-                        st.error("パスワードが間違っています。")
             
             with col_edit:
                 c_e1, c_e2 = st.columns(2)
                 with c_e1:
                     if st.button("✏️ 修正"):
-                        st.session_state.editing_char_id = char['id']
-                        st.rerun()
+                        if verify_password_list():
+                            st.session_state.editing_char_id = char['id']
+                            st.rerun()
                 with c_e2:
                     if st.button("🗑️ 削除"):
                         if verify_password_list():
@@ -1098,8 +1101,6 @@ def render_list_page(manager):
                             st.success("削除しました")
                             time.sleep(1)
                             st.rerun()
-                        else:
-                            st.error("パスワード不可")
 
 
 def generate_card_zip(char, manager):
@@ -1661,8 +1662,12 @@ def render_relation_page(manager):
         title = f"{char['name']}\n{char['details'].get('role', '')}"
         
         image_b64 = None
+        image_b64 = None
         if char['images']:
-            image_b64 = get_image_base64(char['images'][0])
+            # Safe Load for Graph
+            p = get_safe_image(char['images'][0])
+            if p:
+                image_b64 = get_image_base64(p)
         
         if image_b64:
             img_src = f"data:image/png;base64,{image_b64}"
@@ -1955,6 +1960,7 @@ def main():
         for k in list(st.session_state.keys()):
             if (k.startswith('reg_') or k.startswith('stat_') or k.startswith('p_stat_') 
                 or k.startswith('input_') or k.startswith('picker_') or k == 'bio_input_area'
+                or k == 'bio_short_input' or k.startswith('rel_') # Clear persistent text areas
                 or k.startswith('u') or k.startswith('del_img_')): # Clear uploaders and deletes too
                 try:
                      del st.session_state[k]
