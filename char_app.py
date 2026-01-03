@@ -1957,10 +1957,6 @@ def main():
         
     st.sidebar.divider()
     
-    # --- Global Security Input ---
-    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
-        st.caption("変更・保存・削除に必要です")
-        st.text_input("編集パスワード", type="password", key="global_admin_pw")
 
     if st.sidebar.button("➕ 新規登録", use_container_width=True, type="primary"):
         if verify_admin():
@@ -1982,6 +1978,13 @@ def main():
     if st.sidebar.button("🤝 人間関係", type="primary", use_container_width=True):
         st.session_state.view_mode = 'relation'
         st.rerun()
+
+    st.sidebar.divider()
+    
+    # --- Global Security Input ---
+    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
+        st.caption("変更・保存・削除に必要です")
+        st.text_input("編集パスワード", type="password", key="global_admin_pw")
 
     # Routing
     # We use session_state.view_mode as primary router
