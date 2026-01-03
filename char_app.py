@@ -158,7 +158,9 @@ class CharacterManager:
             f.write(uploaded_file.getbuffer())
             
         # Return logical path with forward slashes for DB consistency
-        return file_path.replace("\\", "/")
+        final_path = file_path.replace("\\", "/")
+        print(f"DEBUG: Saved image to {final_path}")
+        return final_path
 
     def get_character(self, char_id):
         for char in self.characters:
@@ -623,6 +625,8 @@ def render_register_page(manager, edit_char_id=None):
             
             # Always append to maintain slot position (index 0 is Image 1, etc.)
             updated_paths.append(final_path)
+            
+        print(f"DEBUG: Final Updated Paths: {updated_paths}")
             # This explains why users get confused about layout positions!
             # If they want specific layout, they rely on Index.
             # If I pad with None, I can preserve slots.
@@ -1461,17 +1465,13 @@ def generate_card_zip(char, manager):
     # --- 2. STATS CARD (V33 - Grid on Top, Darker) ---
     def create_card_2():
         print("DEBUG: Creating Card 2 (V33)")
-        if os.path.exists(BG2_PATH):
-            bg = Image.open(BG2_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
-            draw = ImageDraw.Draw(bg)
-        elif os.path.exists(TEXTURE_PATH):
+        if os.path.exists(TEXTURE_PATH):
             bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
-            draw = ImageDraw.Draw(bg)
-            draw_decorations(draw, 1024, 768)
         else:
             bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
-            draw = ImageDraw.Draw(bg)
-            draw_decorations(draw, 1024, 768)
+        
+        draw = ImageDraw.Draw(bg)
+        draw_decorations(draw, 1024, 768)
         
         un = char.get('user_name', '')
         if un: draw.text((512, 25), f"User: {un}", font=f_small, fill="gray", anchor="mm")
