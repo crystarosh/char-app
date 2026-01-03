@@ -1104,10 +1104,10 @@ def generate_card_zip(char, manager):
     CANVAS_LANDSCAPE = (1024, 768)
     
     FONT_PATH = "fonts/NotoSansJP-Regular.otf"
-    TEXTURE_PATH = os.path.join("templates", "paper_texture.png")
+    TEXTURE_PATH = os.path.join("templates", "paper_texture.jpg")
     CORNER_PATH = os.path.join("templates", "parts_deco_corner_tr.png")
-    BG2_PATH = os.path.join("templates", "SNS-2.png")
-    BG3_PATH = os.path.join("templates", "SNS-3.png")
+    BG2_PATH = os.path.join("templates", "SNS-2.png") # Unused for now
+    BG3_PATH = os.path.join("templates", "SNS-3.png") # Unused for now
 
     def get_font(size):
         try:
@@ -1502,13 +1502,10 @@ def generate_card_zip(char, manager):
     # --- 3. GALLERY CARD (V33 - Keep V31 Layout) ---
     def create_card_3():
         print("DEBUG: Creating Card 3 (V33)")
-        if os.path.exists(BG3_PATH):
-            bg = Image.open(BG3_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
+        if os.path.exists(TEXTURE_PATH):
+            bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
         else:
-            if os.path.exists(TEXTURE_PATH):
-                bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
-            else:
-                bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
+            bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
             
         imgs = char.get('images', [])
         def gv(i):
@@ -1549,8 +1546,7 @@ def generate_card_zip(char, manager):
         rel_y = 408 
         
         draw = ImageDraw.Draw(bg)
-        if not os.path.exists(BG3_PATH):
-             draw_decorations(draw, 1024, 768)
+        draw_decorations(draw, 1024, 768)
         
         fname = char.get('first_name', '')
         lname = char.get('last_name', '')
