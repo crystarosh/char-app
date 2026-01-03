@@ -180,6 +180,30 @@ class CharacterManager:
                 return True
         return False
 
+# --- Security Helper (Global) ---
+def verify_admin():
+    # 1. Get Input
+    pw_input = st.session_state.get("global_admin_pw", "")
+    
+    # 2. Get Secret (Robust check for nested or root)
+    secret_pw = st.secrets.get("app_password")
+    if not secret_pw:
+        # Check if inside gcp_service_account (common mistake)
+        gcp = st.secrets.get("gcp_service_account")
+        if gcp and isinstance(gcp, dict):
+            secret_pw = gcp.get("app_password")
+            
+    # 3. Verify
+    if not secret_pw:
+        st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。")
+        return False
+        
+    if pw_input == secret_pw:
+        return True
+    
+    st.error("パスワードが間違っています。")
+    return False
+
 # --- UI Functions (Placeholders) ---
 def render_register_page(manager, edit_char_id=None):
     title = "新規キャラクター登録"
@@ -213,22 +237,8 @@ def render_register_page(manager, edit_char_id=None):
         st.session_state.view_mode = 'list'
         st.rerun()
 
-    # --- Security Input ---
-    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
-        st.caption("保存・削除・DL時に必要です")
-        input_pw = st.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください", key="pw_reg")
-
-    def verify_password():
-        # Secure By Default
-        if "app_password" not in st.secrets:
-            st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。") 
-            return False
-            
-        if input_pw == st.secrets["app_password"]:
-            return True
-            
-        st.error("パスワードが間違っています。")
-        return False
+    # Security Input moved to Global (main)
+    # verify_admin() available globally
 
     st.markdown(f"### <span style='color:#bbb'>⚜</span> {title}", unsafe_allow_html=True)
     sid = st.session_state.get("reg_form_key", "init")
@@ -535,7 +545,7 @@ def render_register_page(manager, edit_char_id=None):
     submitted = st.button("登録 / 更新", type="primary")
     
     if submitted:
-        if not verify_password():
+        if not verify_admin():
             return
             
         if not first_name_in:
@@ -666,15 +676,13 @@ def render_register_page(manager, edit_char_id=None):
              # Delete Logic
              if st.checkbox("削除モード", key="enable_del"):
                  if st.button("このキャラクターを削除", type="primary"):
-                     if verify_password():
+                     if verify_admin():
                          manager.delete_character(edit_char_id)
                          st.success("削除しました！")
                          time.sleep(1)
                          st.session_state.editing_char_id = None
                          st.session_state.view_mode = 'list'
                          st.rerun()
-                     else:
-                         st.error("パスワードが間違っています。削除できません。")
 
 
 
@@ -691,22 +699,7 @@ def render_list_page(manager):
          render_register_page(manager, st.session_state.editing_char_id)
          return
 
-    # --- Security Input (Duplicated for List View) ---
-    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
-        st.caption("保存・削除・DL時に必要です")
-        input_pw_list = st.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
-
-    def verify_password_list():
-        # Secure By Default: Block if secret IS NOT set
-        if "app_password" not in st.secrets:
-            st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。")
-            return False
-            
-        if input_pw_list == st.secrets["app_password"]:
-            return True
-            
-        st.error("パスワードが間違っています。")
-        return False
+    # Security Input moved to Global (main)
 
     # --- LIST MODE ---
     if st.session_state.view_mode == 'list':
@@ -1080,7 +1073,7 @@ def render_list_page(manager):
             col_sns, col_edit = st.columns([2, 1])
             with col_sns:
                  if st.button("📱 SNS用カード画像を生成 (ZIP)"):
-                    if verify_password_list():
+                    if verify_admin():
                         with st.spinner("生成中..."):
                             zip_data = generate_card_zip(char, manager)
                             st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
@@ -1089,12 +1082,12 @@ def render_list_page(manager):
                 c_e1, c_e2 = st.columns(2)
                 with c_e1:
                     if st.button("✏️ 修正"):
-                        if verify_password_list():
+                        if verify_admin():
                             st.session_state.editing_char_id = char['id']
                             st.rerun()
                 with c_e2:
                     if st.button("🗑️ 削除"):
-                        if verify_password_list():
+                        if verify_admin():
                             manager.delete_character(char['id'])
                             st.session_state.view_mode = 'list'
                             st.session_state.selected_char_id = None
@@ -1952,27 +1945,29 @@ def main():
         st.session_state.editing_char_id = None # Correctly clear editing state
         st.rerun()
         
-    if st.sidebar.button("➕ 新規登録", use_container_width=True, type="primary"):
-        st.session_state.view_mode = 'register'
-        st.session_state.editing_char_id = None
-        st.session_state.reg_form_key = str(uuid.uuid4())
-        # Clear input state
-        for k in list(st.session_state.keys()):
-            if (k.startswith('reg_') or k.startswith('stat_') or k.startswith('p_stat_') 
-                or k.startswith('input_') or k.startswith('picker_') or k == 'bio_input_area'
-                or k == 'bio_short_input' or k.startswith('rel_') # Clear persistent text areas
-                or k.startswith('u') or k.startswith('del_img_')): # Clear uploaders and deletes too
-                try:
-                     del st.session_state[k]
-                except:
-                     pass
-        st.rerun()
-
-    if st.sidebar.button("🤝 人間関係", type="primary", use_container_width=True):
-        st.session_state.view_mode = 'relation'
-        st.rerun()
-
     st.sidebar.divider()
+    
+    # --- Global Security Input ---
+    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
+        st.caption("変更・保存・削除に必要です")
+        st.text_input("編集パスワード", type="password", key="global_admin_pw")
+
+    if st.sidebar.button("➕ 新規登録", use_container_width=True, type="primary"):
+        if verify_admin():
+            st.session_state.view_mode = 'register'
+            st.session_state.editing_char_id = None
+            st.session_state.reg_form_key = str(uuid.uuid4())
+            # Clear input state
+            for k in list(st.session_state.keys()):
+                if (k.startswith('reg_') or k.startswith('stat_') or k.startswith('p_stat_') 
+                    or k.startswith('input_') or k.startswith('picker_') or k == 'bio_input_area'
+                    or k == 'bio_short_input' or k.startswith('rel_') # Clear persistent text areas
+                    or k.startswith('u') or k.startswith('del_img_')): # Clear uploaders and deletes too
+                    try:
+                         del st.session_state[k]
+                    except:
+                         pass
+            st.rerun()
 
     # Routing
     # We use session_state.view_mode as primary router
