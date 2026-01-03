@@ -215,26 +215,13 @@ def render_register_page(manager, edit_char_id=None):
 
     # --- Security Input ---
     st.sidebar.markdown("### 🔒 セキュリティ")
-    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください")
+    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください", key="pw_reg")
 
     def verify_password():
-        # 1. Local Dev Mode (No password set in secrets) -> Allow
+        # Secure By Default
         if "app_password" not in st.secrets:
-            return True
-        # 2. Check input
-        if input_pw == st.secrets["app_password"]:
-            return True
-        return False
-
-    # --- Security Input ---
-    st.sidebar.markdown("### 🔒 セキュリティ")
-    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください")
-
-    def verify_password():
-        # 1. Local Dev Mode (No password set in secrets) -> Allow
-        if "app_password" not in st.secrets:
-            return True
-        # 2. Check input
+            # st.error("管理用パスワードが未設定です") 
+            return False
         if input_pw == st.secrets["app_password"]:
             return True
         return False
@@ -699,8 +686,12 @@ def render_list_page(manager):
     input_pw_list = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
 
     def verify_password_list():
+        # Secure By Default: Block if secret IS NOT set
         if "app_password" not in st.secrets:
-            return True
+            # st.error("管理用パスワードが未設定です") # Optional: silent fail or visual cue?
+            # Visual cue is better for debugging
+            return False
+            
         if input_pw_list == st.secrets["app_password"]:
             return True
         return False
