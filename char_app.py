@@ -374,7 +374,7 @@ def render_register_page(manager, edit_char_id=None):
     st.markdown("##### 詳細用（長文） (Web詳細)")
     st.caption("Webの詳細画面で表示される全文です。画像には使用されません。")
     bio_long_val = existing_data.get('bio', '')
-    bio_in = st.text_area("詳細設定・裏設定など", value=bio_long_val, height=300, key="bio_input_area")
+    bio_in = st.text_area("詳細設定・裏設定など", value=bio_long_val, height=500, key="bio_input_area")
     st.caption(f"現在の文字数: {len(bio_in)} 文字")
     st.markdown("### <span style='color:#bbb'>⚜</span> 基礎ステータス", unsafe_allow_html=True)
     labels_basic = ["知力", "体力", "魔力", "防御力", "行動力", "攻撃力", "自信"]
@@ -490,7 +490,7 @@ def render_register_page(manager, edit_char_id=None):
     char_map = {}
     for c in existing_chars:
         # Avoid empty names breaking display
-        d = f"{c.get('last_name', '')} {c.get('first_name', '')}".strip()
+        d = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
         if not d: d = c.get('name', 'Unknown')
         char_options.append(d)
         char_map[d] = c['name'] 
@@ -519,7 +519,7 @@ def render_register_page(manager, edit_char_id=None):
             target_id = None
             target_name_original = ""
             for c in existing_chars:
-                 d = f"{c.get('last_name', '')} {c.get('first_name', '')}".strip()
+                 d = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
                  if not d: d = c.get('name', '')
                  if d == r_target_disp:
                      target_id = c['id']
@@ -589,7 +589,7 @@ def render_register_page(manager, edit_char_id=None):
             },
             "works_url": works_url, 
             "images": current_images[:], 
-            "relations": st.session_state.reg_relations
+            "relations": list(st.session_state.reg_relations)
         }
         
         if lb_target != "(なし)":
@@ -1069,7 +1069,15 @@ def render_list_page(manager):
                              else:
                                  st.markdown("👤")
                     with r_c2:
-                         if st.button(f"{rel['target_name']} ({rel['type']})", key=f"rel_{char['id']}_{i}"):
+                         # Calculate name fresh
+                         r_name = rel['target_name']
+                         if target_char:
+                             if target_char.get('first_name') and target_char.get('last_name'):
+                                 r_name = f"{target_char['first_name']} {target_char['last_name']}"
+                             else:
+                                 r_name = target_char['name']
+                         
+                         if st.button(f"{r_name} ({rel['type']})", key=f"rel_{char['id']}_{i}"):
                              if target_char:
                                 st.session_state.selected_char_id = target_char['id']
                                 st.rerun()
@@ -1121,8 +1129,10 @@ def generate_card_zip(char, manager):
     CANVAS_LANDSCAPE = (1024, 768)
     
     FONT_PATH = "fonts/NotoSansJP-Regular.otf"
-    TEXTURE_PATH = "C:/Users/sweet/.gemini/antigravity/brain/f632eb69-1385-4e0a-bf7b-2cc9ec5d7899/old_paper_texture_1767013103684.png"
-    CORNER_PATH = "C:/Users/sweet/.gemini/antigravity/brain/f632eb69-1385-4e0a-bf7b-2cc9ec5d7899/victorian_corner_1767013906098.png"
+    TEXTURE_PATH = os.path.join("templates", "paper_texture.png")
+    CORNER_PATH = os.path.join("templates", "parts_deco_corner_tr.png")
+    BG2_PATH = os.path.join("templates", "SNS-2.png")
+    BG3_PATH = os.path.join("templates", "SNS-3.png")
 
     def get_font(size):
         try:
@@ -1385,12 +1395,14 @@ def generate_card_zip(char, manager):
         
         img2_box = (im2_x, 107, im2_w, 520)
         
-        if len(char['images']) > 0:
-            if char['images'][0] and os.path.exists(char['images'][0]):
-                draw_shadowed_rounded_image(img, char['images'][0], img1_box, radius=20)
-        if len(char['images']) > 1:
-             if char['images'][1] and os.path.exists(char['images'][1]):
-                draw_shadowed_rounded_image(img, char['images'][1], img2_box, radius=20, centering=(0.5, 0.2))
+        if len(char['images']) > 0 and char['images'][0]:
+            p1 = get_safe_image(char['images'][0])
+            if p1:
+                draw_shadowed_rounded_image(img, p1, img1_box, radius=20)
+        if len(char['images']) > 1 and char['images'][1]:
+             p2 = get_safe_image(char['images'][1])
+             if p2:
+                draw_shadowed_rounded_image(img, p2, img2_box, radius=20, centering=(0.5, 0.2))
             
         draw = ImageDraw.Draw(img)
         lx = 125
@@ -1472,13 +1484,17 @@ def generate_card_zip(char, manager):
     # --- 2. STATS CARD (V33 - Grid on Top, Darker) ---
     def create_card_2():
         print("DEBUG: Creating Card 2 (V33)")
-        if os.path.exists(TEXTURE_PATH):
+        if os.path.exists(BG2_PATH):
+            bg = Image.open(BG2_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
+            draw = ImageDraw.Draw(bg)
+        elif os.path.exists(TEXTURE_PATH):
             bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
+            draw = ImageDraw.Draw(bg)
+            draw_decorations(draw, 1024, 768)
         else:
             bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
-        draw = ImageDraw.Draw(bg)
-        
-        draw_decorations(draw, 1024, 768)
+            draw = ImageDraw.Draw(bg)
+            draw_decorations(draw, 1024, 768)
         
         un = char.get('user_name', '')
         if un: draw.text((512, 25), f"User: {un}", font=f_small, fill="gray", anchor="mm")
@@ -1515,13 +1531,19 @@ def generate_card_zip(char, manager):
     # --- 3. GALLERY CARD (V33 - Keep V31 Layout) ---
     def create_card_3():
         print("DEBUG: Creating Card 3 (V33)")
-        if os.path.exists(TEXTURE_PATH):
-            bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
+        if os.path.exists(BG3_PATH):
+            bg = Image.open(BG3_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
         else:
-            bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
+            if os.path.exists(TEXTURE_PATH):
+                bg = Image.open(TEXTURE_PATH).convert("RGBA").resize(CANVAS_LANDSCAPE)
+            else:
+                bg = Image.new("RGBA", CANVAS_LANDSCAPE, (250, 245, 230, 255))
             
         imgs = char.get('images', [])
-        def gv(i): return imgs[i] if i<len(imgs) and imgs[i] and os.path.exists(imgs[i]) else None
+        def gv(i):
+            if i < len(imgs) and imgs[i]:
+                 return get_safe_image(imgs[i])
+            return None
         p2, p3, p4, p5 = gv(2), gv(3), gv(5), gv(4)
         
         y_start = 100
@@ -1556,7 +1578,8 @@ def generate_card_zip(char, manager):
         rel_y = 408 
         
         draw = ImageDraw.Draw(bg)
-        draw_decorations(draw, 1024, 768)
+        if not os.path.exists(BG3_PATH):
+             draw_decorations(draw, 1024, 768)
         
         fname = char.get('first_name', '')
         lname = char.get('last_name', '')
@@ -1955,8 +1978,6 @@ def main():
         st.session_state.editing_char_id = None # Correctly clear editing state
         st.rerun()
         
-    st.sidebar.divider()
-    
 
     if st.sidebar.button("➕ 新規登録", use_container_width=True, type="primary"):
         if verify_admin():
