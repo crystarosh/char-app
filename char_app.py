@@ -214,8 +214,9 @@ def render_register_page(manager, edit_char_id=None):
         st.rerun()
 
     # --- Security Input ---
-    st.sidebar.markdown("### 🔒 セキュリティ")
-    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください", key="pw_reg")
+    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
+        st.caption("保存・削除・DL時に必要です")
+        input_pw = st.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください", key="pw_reg")
 
     def verify_password():
         # Secure By Default
@@ -413,33 +414,39 @@ def render_register_page(manager, edit_char_id=None):
     
     with img_col1:
         st.markdown("**画像1 (Profile)** <span style='color:red; font-size:0.8em'>(必須)</span>", unsafe_allow_html=True)
-        if get_cur(0): 
-            st.image(get_cur(0), width=100)
+        # Safe Image Load
+        p1 = get_safe_image(get_cur(0))
+        if p1: 
+            st.image(p1, width=100)
             d1 = st.checkbox("画像1を削除", key=f"del_img_1_{sid}")
         u1 = st.file_uploader("上書き/新規 (No.1)", type=["png", "jpg"], key=f"u1_{sid}")
         
         st.markdown("**画像3 (Gallery A)**")
-        if get_cur(2): 
-            st.image(get_cur(2), width=100)
+        p3 = get_safe_image(get_cur(2))
+        if p3: 
+            st.image(p3, width=100)
             d3 = st.checkbox("画像3を削除", key=f"del_img_3_{sid}")
         u3 = st.file_uploader("上書き/新規 (No.3)", type=["png", "jpg"], key=f"u3_{sid}")
         
         st.markdown("**画像5 (Gallery C)**")
-        if get_cur(4): 
-            st.image(get_cur(4), width=100)
+        p5 = get_safe_image(get_cur(4))
+        if p5: 
+            st.image(p5, width=100)
             d5 = st.checkbox("画像5を削除", key=f"del_img_5_{sid}")
         u5 = st.file_uploader("上書き/新規 (No.5)", type=["png", "jpg"], key=f"u5_{sid}")
 
     with img_col2:
         st.markdown("**画像2 (Full Body)** <span style='color:red; font-size:0.8em'>(必須)</span>", unsafe_allow_html=True)
-        if get_cur(1): 
-            st.image(get_cur(1), width=100)
+        p2 = get_safe_image(get_cur(1))
+        if p2: 
+            st.image(p2, width=100)
             d2 = st.checkbox("画像2を削除", key=f"del_img_2_{sid}")
         u2 = st.file_uploader("上書き/新規 (No.2)", type=["png", "jpg"], key=f"u2_{sid}")
         
         st.markdown("**画像4 (Gallery B)**")
-        if get_cur(3): 
-            st.image(get_cur(3), width=100)
+        p4 = get_safe_image(get_cur(3))
+        if p4: 
+            st.image(p4, width=100)
             d4 = st.checkbox("画像4を削除", key=f"del_img_4_{sid}")
         u4 = st.file_uploader("上書き/新規 (No.4)", type=["png", "jpg"], key=f"u4_{sid}")
 
@@ -682,8 +689,9 @@ def render_list_page(manager):
          return
 
     # --- Security Input (Duplicated for List View) ---
-    st.sidebar.markdown("### 🔒 セキュリティ")
-    input_pw_list = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
+    with st.sidebar.expander("🔒 セキュリティ設定", expanded=False):
+        st.caption("保存・削除・DL時に必要です")
+        input_pw_list = st.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
 
     def verify_password_list():
         # Secure By Default: Block if secret IS NOT set
