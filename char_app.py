@@ -221,7 +221,7 @@ def render_register_page(manager, edit_char_id=None):
     def verify_password():
         # Secure By Default
         if "app_password" not in st.secrets:
-            # st.error("管理用パスワードが未設定です") 
+            st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。") 
             return False
         if input_pw == st.secrets["app_password"]:
             return True
@@ -451,8 +451,9 @@ def render_register_page(manager, edit_char_id=None):
         u4 = st.file_uploader("上書き/新規 (No.4)", type=["png", "jpg"], key=f"u4_{sid}")
 
         st.markdown("**画像6 (Gallery D)**")
-        if get_cur(5): 
-            st.image(get_cur(5), width=100)
+        p6 = get_safe_image(get_cur(5))
+        if p6: 
+            st.image(p6, width=100)
             d6 = st.checkbox("画像6を削除", key=f"del_img_6_{sid}")
         u6 = st.file_uploader("上書き/新規 (No.6)", type=["png", "jpg"], key=f"u6_{sid}")
 
@@ -696,8 +697,7 @@ def render_list_page(manager):
     def verify_password_list():
         # Secure By Default: Block if secret IS NOT set
         if "app_password" not in st.secrets:
-            # st.error("管理用パスワードが未設定です") # Optional: silent fail or visual cue?
-            # Visual cue is better for debugging
+            st.error("⚠️ 管理用パスワード(Secrets)が設定されていません。クラウド設定を確認してください。")
             return False
             
         if input_pw_list == st.secrets["app_password"]:
