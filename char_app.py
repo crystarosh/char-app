@@ -627,12 +627,6 @@ def render_register_page(manager, edit_char_id=None):
             updated_paths.append(final_path)
             
         print(f"DEBUG: Final Updated Paths: {updated_paths}")
-            # This explains why users get confused about layout positions!
-            # If they want specific layout, they rely on Index.
-            # If I pad with None, I can preserve slots.
-            # Let's try to PAD with None to length 5.
-            
-            updated_paths.append(final_path)
             
         new_char['images'] = updated_paths
 
