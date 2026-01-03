@@ -621,31 +621,8 @@ def render_register_page(manager, edit_char_id=None):
                 if old_path:
                     final_path = old_path
             
-            # Note: We must maintain the LIST SIZE or allow None holes?
-            # V33 renderer logic iterates `imgs` list.
-            # If we remove item 2, indices shift! This causes scramble again.
-            # We MUST Insert None or placeholder if we want to preserve "Slot 5".
-            # BUT Current logic `updated_paths.append` creates a dense list.
-            # If user deletes Image 3, Image 4 becomes Image 3.
-            # This SHIFTS the layout.
-            # Is this desired?
-            # If user wants to "Empty Slot 3" but keep "Slot 4"...
-            # The current system uses `len(images)` logic implicitly?
-            # No, `create_card_3` uses `p2 = gv(2)`, `p3 = gv(3)`.
-            # If we delete index 2, then index 3 becomes 2.
-            # So Image 4 MOVES to Slot 3 (Left Tall).
-            # This is standard list behavior.
-            # If user wants fixed slots, we need to store `[path, path, None, path]`.
-            # Does `manager.save` support storing None?
-            # `current_images` comes from json.
-            # If `updated_paths` has None, does JSON save it? Yes, null.
-            # `gv(i)` handle None? `return imgs[i] ... if ... os.path.exists`.
-            # So None is safe.
-            # So I should APPEND None if necessary to keep alignment?
-            # Actually, `render_register_page` usually compacts lists?
-            # My previous code: `if final_path: updated_paths.append`.
-            # This COMPACTS.
-            # Meaning: Deleting Image 3 shifts Image 4 to Position 3.
+            # Always append to maintain slot position (index 0 is Image 1, etc.)
+            updated_paths.append(final_path)
             # This explains why users get confused about layout positions!
             # If they want specific layout, they rely on Index.
             # If I pad with None, I can preserve slots.
@@ -1610,8 +1587,12 @@ def generate_card_zip(char, manager):
              
              ic_sz = 60
              ic = None
-             if tgt and tgt.get('images'):
-                 ic = load_image_masked(tgt['images'][0], (ic_sz, ic_sz), radius=10)
+             if tgt and tgt.get('images') and tgt['images'][0]:
+                 safe_icon_path = get_safe_image(tgt['images'][0])
+                 if safe_icon_path:
+                     ic = load_image_masked(safe_icon_path, (ic_sz, ic_sz), radius=10)
+                 else:
+                     ic = Image.new("RGBA", (ic_sz, ic_sz), (220, 220, 220, 255))
              else:
                  ic = Image.new("RGBA", (ic_sz, ic_sz), (220, 220, 220, 255))
              
