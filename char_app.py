@@ -699,6 +699,11 @@ def render_list_page(manager):
     input_pw_list = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
 
     def verify_password_list():
+        if "app_password" not in st.secrets:
+            return True
+        if input_pw_list == st.secrets["app_password"]:
+            return True
+        return False
 
     # --- LIST MODE ---
     if st.session_state.view_mode == 'list':
