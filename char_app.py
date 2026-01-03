@@ -1775,6 +1775,14 @@ def main():
             border-radius: 4px;
             font-family: 'Times New Roman', serif;
         }
+        
+        /* Focus Visibility (Gemini 3 Proposal - Dark Mode Adapted) */
+        [data-testid="stTextArea"] textarea:focus, [data-testid="stTextInput"] input:focus {
+            caret-color: #FF0000 !important; /* Red Caret */
+            background-color: #38382d !important; /* Subtle Dark Yellow Focus BG */
+            border: 2px solid #FFEB3B !important; /* Gold Border */
+            outline: none !important;
+        }
         ul[data-baseweb="menu"] {
             background-color: #2c2c2c !important;
             color: #f0f0f0 !important;
