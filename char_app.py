@@ -154,8 +154,14 @@ class CharacterManager:
         file_path = os.path.join(IMAGES_DIR, unique_filename)
         
         # Save explicitly using PIL or just write bytes
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        # Save explicitly using PIL or just write bytes
+        try:
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+        except Exception as e:
+            print(f"ERROR: Failed to save image {unique_filename}: {e}")
+            st.error(f"画像の保存に失敗しました: {e}")
+            return None
             
         # Return logical path with forward slashes for DB consistency
         final_path = file_path.replace("\\", "/")
@@ -838,7 +844,7 @@ def render_list_page(manager):
             # Construct name: First Last
             d_name = char['name']
             if char.get('first_name') and char.get('last_name'):
-                d_name = f"{char['first_name']} {char['last_name']}"
+                d_name = f"{char['first_name']}・{char['last_name']}"
             st.header(d_name) 
         with h_col2:
             st.button("詳細を閉じる", key="back_btn_top", on_click=go_back)
