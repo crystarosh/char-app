@@ -213,6 +213,32 @@ def render_register_page(manager, edit_char_id=None):
         st.session_state.view_mode = 'list'
         st.rerun()
 
+    # --- Security Input ---
+    st.sidebar.markdown("### 🔒 セキュリティ")
+    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください")
+
+    def verify_password():
+        # 1. Local Dev Mode (No password set in secrets) -> Allow
+        if "app_password" not in st.secrets:
+            return True
+        # 2. Check input
+        if input_pw == st.secrets["app_password"]:
+            return True
+        return False
+
+    # --- Security Input ---
+    st.sidebar.markdown("### 🔒 セキュリティ")
+    input_pw = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除する場合に入力してください")
+
+    def verify_password():
+        # 1. Local Dev Mode (No password set in secrets) -> Allow
+        if "app_password" not in st.secrets:
+            return True
+        # 2. Check input
+        if input_pw == st.secrets["app_password"]:
+            return True
+        return False
+
     st.markdown(f"### <span style='color:#bbb'>⚜</span> {title}", unsafe_allow_html=True)
     sid = st.session_state.get("reg_form_key", "init")
     
@@ -511,6 +537,10 @@ def render_register_page(manager, edit_char_id=None):
     submitted = st.button("登録 / 更新", type="primary")
     
     if submitted:
+        if not verify_password():
+            st.error("パスワードが間違っています。保存できません。")
+            return
+            
         if not first_name_in:
             st.error("名 (First Name) は必須です。")
             return
@@ -631,6 +661,25 @@ def render_register_page(manager, edit_char_id=None):
         time.sleep(1)
         st.rerun()
 
+    # --- DELETE BUTTON ---
+    if edit_char_id:
+        st.markdown("---")
+        col_del_1, col_del_2 = st.columns([1, 4])
+        with col_del_1:
+             # Delete Logic
+             if st.checkbox("削除モード", key="enable_del"):
+                 if st.button("このキャラクターを削除", type="primary"):
+                     if verify_password():
+                         manager.delete_character(edit_char_id)
+                         st.success("削除しました！")
+                         time.sleep(1)
+                         st.session_state.editing_char_id = None
+                         st.session_state.view_mode = 'list'
+                         st.rerun()
+                     else:
+                         st.error("パスワードが間違っています。削除できません。")
+
+
 
 
 def render_list_page(manager):
@@ -639,6 +688,17 @@ def render_list_page(manager):
         st.session_state.view_mode = 'list'
     if 'selected_char_id' not in st.session_state:
         st.session_state.selected_char_id = None
+        
+    # --- Security Input (Duplicated for List View) ---
+    st.sidebar.markdown("### 🔒 セキュリティ")
+    input_pw_list = st.sidebar.text_input("編集パスワード", type="password", help="保存・削除・DLする場合に入力してください", key="pw_list")
+
+    def verify_password_list():
+        if "app_password" not in st.secrets:
+            return True
+        if input_pw_list == st.secrets["app_password"]:
+            return True
+        return False
 
     # check if editing (which might have been set from detail view)
     if st.session_state.get('editing_char_id'):
@@ -997,7 +1057,11 @@ def render_list_page(manager):
                     r_c1, r_c2 = st.columns([1, 4])
                     with r_c1:
                          if target_char and target_char.get('images'):
-                             st.image(target_char['images'][0], width=50) # Small icon
+                             t_img_path = get_safe_image(target_char['images'][0])
+                             if t_img_path:
+                                 st.image(t_img_path, width=50) # Small icon
+                             else:
+                                 st.markdown("👤")
                     with r_c2:
                          if st.button(f"{rel['target_name']} ({rel['type']})", key=f"rel_{char['id']}_{i}"):
                              if target_char:
@@ -1013,9 +1077,12 @@ def render_list_page(manager):
             col_sns, col_edit = st.columns([2, 1])
             with col_sns:
                  if st.button("📱 SNS用カード画像を生成 (ZIP)"):
-                    with st.spinner("生成中..."):
-                        zip_data = generate_card_zip(char, manager)
-                        st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
+                    if verify_password_list():
+                        with st.spinner("生成中..."):
+                            zip_data = generate_card_zip(char, manager)
+                            st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
+                    else:
+                        st.error("パスワードが間違っています。")
             
             with col_edit:
                 c_e1, c_e2 = st.columns(2)
@@ -1025,12 +1092,15 @@ def render_list_page(manager):
                         st.rerun()
                 with c_e2:
                     if st.button("🗑️ 削除"):
-                        manager.delete_character(char['id'])
-                        st.session_state.view_mode = 'list'
-                        st.session_state.selected_char_id = None
-                        st.success("削除しました")
-                        time.sleep(1)
-                        st.rerun()
+                        if verify_password_list():
+                            manager.delete_character(char['id'])
+                            st.session_state.view_mode = 'list'
+                            st.session_state.selected_char_id = None
+                            st.success("削除しました")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("パスワード不可")
 
 
 def generate_card_zip(char, manager):
