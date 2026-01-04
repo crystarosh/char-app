@@ -241,6 +241,7 @@ def get_drive_service():
         SCOPES = ['https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         service = build('drive', 'v3', credentials=creds)
+        print("Using Service Account for Drive")
         return service
     except Exception as e:
         print(f"Drive Auth Error: {e}")
@@ -261,9 +262,15 @@ def upload_image_to_drive(service, image_obj, folder_id, filename):
         }
         media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
         
-        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        print(f"Uploaded File ID: {file.get('id')}")
-        return True, file.get('id')
+        # Request webViewLink (for viewing) and webContentLink (for direct download)
+        fields = 'id, webViewLink, webContentLink'
+        file = service.files().create(body=file_metadata, media_body=media, fields=fields).execute()
+        
+        file_id = file.get('id')
+        web_link = file.get('webViewLink')
+        
+        print(f"Uploaded File ID: {file_id}, Link: {web_link}")
+        return True, web_link
     except Exception as e:
         err_msg = str(e)
         print(f"Upload Error: {err_msg}")
@@ -291,13 +298,16 @@ def delete_file_from_drive(service, filename, folder_id):
         return False, str(e)
 
 
-
 def backup_char_images_to_drive(service, char_data, folder_id):
     if not service or not char_data or not folder_id: return 0, 0, "Missing params"
     
     success_cnt = 0
     fail_cnt = 0
     err_msgs = []
+    
+    # Initialize drive_links dict if not exists
+    if 'drive_links' not in char_data:
+        char_data['drive_links'] = {}
     
     imgs = char_data.get('images', [])
     for i, img_path in enumerate(imgs):
@@ -312,11 +322,21 @@ def backup_char_images_to_drive(service, char_data, folder_id):
                 # Naming: {id}_source_{i}.jpg
                 fname = f"{char_data['id']}_source_{i}.jpg"
                 
-                ok, msg = upload_image_to_drive(service, img_obj, folder_id, fname)
-                if ok: success_cnt += 1
+                # Check if we should delete old version first? 
+                # Create usually makes a new file with same name if not carefully handled, 
+                # but for backup "Replace" is better.
+                # Ideally we search and delete (or update).
+                # For simplicity/robustness, let's delete old one by name first.
+                delete_file_from_drive(service, fname, folder_id)
+                
+                ok, res = upload_image_to_drive(service, img_obj, folder_id, fname)
+                if ok: 
+                    success_cnt += 1
+                    # Save Link
+                    char_data['drive_links'][f"image_{i}"] = res
                 else: 
                     fail_cnt += 1
-                    err_msgs.append(f"Img{i}: {msg}")
+                    err_msgs.append(f"Img{i}: {res}")
             except Exception as e:
                 fail_cnt += 1
                 err_msgs.append(f"Img{i}: {e}")
@@ -765,7 +785,21 @@ def render_register_page(manager, edit_char_id=None):
                 svc = get_drive_service()
                 if svc:
                     sc, fc, em = backup_char_images_to_drive(svc, new_char, drive_fid)
-                    if sc > 0: st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                    if sc > 0: 
+                        st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                        # PERSIST THE DRIVE LINKS
+                        # backup_char_images_to_drive updates new_char['drive_links'] in place
+                        if edit_char_id:
+                            manager.update_character(edit_char_id, new_char)
+                        else:
+                            # Actually for new char, we already added it. 
+                            # But since new_char is a dict ref inside list? 
+                            # manager.add_character copies it? 
+                            # manager.add_character appends char_data.
+                            # So modifying new_char MIGHT modify the object in list if reference is kept.
+                            # But let's be safe and force save.
+                            manager.save_data()
+                            
                     if fc > 0: st.warning(f"バックアップ一部失敗: {em}")
 
             st.session_state.view_mode = 'detail'
@@ -781,7 +815,11 @@ def render_register_page(manager, edit_char_id=None):
                 svc = get_drive_service()
                 if svc:
                     sc, fc, em = backup_char_images_to_drive(svc, new_char, drive_fid)
-                    if sc > 0: st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                    if sc > 0: 
+                        st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                        # PERSIST DRIVE LINKS
+                        manager.save_data()
+                        
                     if fc > 0: st.warning(f"バックアップ一部失敗: {em}")
 
             st.session_state.view_mode = 'list'
