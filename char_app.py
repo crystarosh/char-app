@@ -290,8 +290,7 @@ def delete_file_from_drive(service, filename, folder_id):
     except Exception as e:
         return False, str(e)
 
-    except Exception as e:
-        return False, str(e)
+
 
 def backup_char_images_to_drive(service, char_data, folder_id):
     if not service or not char_data or not folder_id: return 0, 0, "Missing params"
