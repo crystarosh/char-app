@@ -247,7 +247,7 @@ def get_drive_service():
         return None
 
 def upload_image_to_drive(service, image_obj, folder_id, filename):
-    if not service or not image_obj: return False
+    if not service or not image_obj: return False, "No service or image"
     
     try:
         # Convert PIL Image to Bytes
@@ -263,10 +263,32 @@ def upload_image_to_drive(service, image_obj, folder_id, filename):
         
         file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         print(f"Uploaded File ID: {file.get('id')}")
-        return True
+        return True, file.get('id')
     except Exception as e:
-        print(f"Upload Error: {e}")
-        return False
+        err_msg = str(e)
+        print(f"Upload Error: {err_msg}")
+        return False, err_msg
+
+def delete_file_from_drive(service, filename, folder_id):
+    if not service or not filename or not folder_id: return False, "Missing params"
+    
+    try:
+        # 1. Search for file by name in folder
+        query = f"name = '{filename}' and '{folder_id}' in parents and trashed = false"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get('files', [])
+        
+        if not files:
+            return True, "File not found (already deleted?)"
+        
+        # 2. Delete all matches (should be one usually)
+        for f in files:
+            service.files().delete(fileId=f['id']).execute()
+            print(f"Deleted Drive File: {f['name']} ({f['id']})")
+            
+        return True, f"Deleted {len(files)} files"
+    except Exception as e:
+        return False, str(e)
 
 # --- UI Functions (Placeholders) ---
 def render_register_page(manager, edit_char_id=None):
@@ -650,8 +672,13 @@ def render_register_page(manager, edit_char_id=None):
              new_char['stats'][lb_target] = lb_value
 
                 # FIX: Ensure order is [u1, u2, u3, u4, u5] AND Handle Deletion
-        ordered_uploads = [u1, u2, u3, u4, u5, u6]
         ordered_deletes = [d1, d2, d3, d4, d5, d6]
+        
+        # --- Drive Deletion Sync Logic ---
+        drive_service = get_drive_service()
+        # prioritized folder id: secrets > session/ui (not applicable here) > none
+        # For deletion/sync to work invisibly, we rely on secrets.
+        drive_folder_id = st.secrets.get("drive_folder_id")
         
         updated_paths = []
         for i in range(6): 
@@ -671,6 +698,17 @@ def render_register_page(manager, edit_char_id=None):
                     final_path = saved_path
             elif is_deleted:
                 final_path = None # Explicitly remove
+                # SYNC DELETE
+                if drive_service and drive_folder_id and edit_char_id:
+                    # Try to delete associated source file on Drive
+                    # Name format: {char_id}_source_{i}.jpg
+                    tgt_name = f"{edit_char_id}_source_{i}.jpg"
+                    ok, d_msg = delete_file_from_drive(drive_service, tgt_name, drive_folder_id)
+                    if ok:
+                        print(f"Drive Sync Delete Success: {tgt_name}")
+                    else:
+                        print(f"Drive Sync Delete Fail: {tgt_name} - {d_msg}")
+                        
             else:
                 if old_path:
                     final_path = old_path
@@ -1105,29 +1143,72 @@ def render_list_page(manager):
             # Action Buttons at Bottom
             col_sns, col_edit = st.columns([2, 1])
             with col_sns:
-                 # Drive UI
-                 with st.expander("Google Drive設定", expanded=False):
-                     use_drive = st.checkbox("Google Driveにも保存", key=f"use_drive_{char['id']}")
-                     drive_folder_id = st.text_input("フォルダID", key=f"drive_fid_{char['id']}", help="Google DriveのURLの末尾などのID部分")
-                 
+            col_sns, col_edit = st.columns([2, 1])
+            with col_sns:
+                 # SNS Card Gen
                  if st.button("📱 SNS用カード画像を生成 (ZIP)"):
                     if verify_admin():
-                        drive_service = None
-                        if use_drive:
+                        with st.spinner("生成中..."):
+                            # Drive logic removed for SNS cards as per request, just download
+                            zip_data, _ = generate_card_zip(char, manager)
+                            st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
+
+                 st.divider()
+                 
+                 # Source Image Backup UI
+                 with st.expander("☁️ 元画像のバックアップ (Google Drive)", expanded=False):
+                     st.caption("現在登録されている Image 1 ~ 6 をGoogle Driveに保存します。")
+                     
+                     # 1. Try get ID from secrets
+                     default_fid = st.secrets.get("drive_folder_id", "")
+                     
+                     # 2. Input (override or initial)
+                     drive_folder_id = st.text_input("保存先フォルダID", value=default_fid, key=f"drive_fid_{char['id']}", help="secrets.tomlに'drive_folder_id'を設定すると自動入力されます")
+                     
+                     if st.button("元画像をDriveに一括保存", key=f"btn_backup_{char['id']}"):
+                        if verify_admin():
                             if not drive_folder_id:
-                                st.error("フォルダIDを入力してください")
+                                st.error("フォルダIDが必要です。")
                             else:
-                                drive_service = get_drive_service()
-                                if not drive_service:
-                                    st.error("Google Driveへの接続に失敗しました。Secrets設定を確認してください。")
-                        
-                        # Proceed if Drive is not strictly required OR if it succeeded
-                        if not use_drive or (use_drive and drive_service):
-                            with st.spinner("生成中..."):
-                                zip_data = generate_card_zip(char, manager, drive_service, drive_folder_id)
-                                st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
-                                if drive_service:
-                                    st.success(f"Google Driveへの保存が完了しました！ (Folder: {drive_folder_id})")
+                                svc = get_drive_service()
+                                if not svc:
+                                    st.error("Drive接続失敗: secrets設定を確認してください")
+                                else:
+                                    with st.spinner("バックアップ中..."):
+                                        success_cnt = 0
+                                        fail_cnt = 0
+                                        
+                                        imgs = char.get('images', [])
+                                        for i, img_path in enumerate(imgs):
+                                            if not img_path: continue
+                                            
+                                            real_path = get_safe_image(img_path)
+                                            if real_path:
+                                                try:
+                                                    # Load and Convert to JPG
+                                                    img_obj = Image.open(real_path)
+                                                    
+                                                    # Naming: {id}_source_{i}.jpg
+                                                    fname = f"{char['id']}_source_{i}.jpg"
+                                                    
+                                                    ok, msg = upload_image_to_drive(svc, img_obj, drive_folder_id, fname)
+                                                    if ok: success_cnt += 1
+                                                    else: 
+                                                        fail_cnt += 1
+                                                        st.error(f"Image {i+1} Err: {msg}")
+                                                except Exception as e:
+                                                    fail_cnt += 1
+                                                    st.error(f"Image {i+1} Load Err: {e}")
+                                        
+                                        if fail_cnt == 0 and success_cnt > 0:
+                                            st.success(f"完了: {success_cnt}枚の画像をバックアップしました！")
+                                        elif success_cnt > 0:
+                                            st.warning(f"完了: {success_cnt}枚 成功 / {fail_cnt}枚 失敗")
+                                        else:
+                                            if not imgs or all(not x for x in imgs):
+                                                st.info("画像が登録されていません")
+                                            else:
+                                                st.error("バックアップに失敗しました")
             
             with col_edit:
                 c_e1, c_e2 = st.columns(2)
@@ -1663,14 +1744,16 @@ def generate_card_zip(char, manager, drive_service=None, drive_folder_id=None):
     i3 = create_card_3()
     
     # Drive Upload Logic
+    upload_results = []
     if drive_service and drive_folder_id:
         safe_name = "".join([c for c in char['name'] if c.isalnum() or c in (' ','_','-')]).strip()
         if not safe_name: safe_name = "char"
         
         # Upload 3 images
-        upload_image_to_drive(drive_service, i1, drive_folder_id, f"{safe_name}_profile.jpg")
-        upload_image_to_drive(drive_service, i2, drive_folder_id, f"{safe_name}_stats.jpg")
-        upload_image_to_drive(drive_service, i3, drive_folder_id, f"{safe_name}_gallery.jpg")
+        for tag, img_obj in [("profile", i1), ("stats", i2), ("gallery", i3)]:
+            fname = f"{safe_name}_{tag}.jpg"
+            success, msg = upload_image_to_drive(drive_service, img_obj, drive_folder_id, fname)
+            upload_results.append({"name": fname, "success": success, "msg": msg})
     
     b = io.BytesIO()
     with zipfile.ZipFile(b, "a", zipfile.ZIP_DEFLATED, False) as z:
@@ -1680,7 +1763,7 @@ def generate_card_zip(char, manager, drive_service=None, drive_folder_id=None):
         bu2 = io.BytesIO(); i2.convert("RGB").save(bu2, "JPEG"); z.writestr(f"{safe_name}_stats.jpg", bu2.getvalue())
         bu3 = io.BytesIO(); i3.convert("RGB").save(bu3, "JPEG"); z.writestr(f"{safe_name}_gallery.jpg", bu3.getvalue())
     b.seek(0)
-    return b
+    return b, upload_results
 
 
 def render_relation_page(manager):
