@@ -705,8 +705,9 @@ def render_register_page(manager, edit_char_id=None):
         if lb_target != "(なし)":
              new_char['stats'][lb_target] = lb_value
 
-                # FIX: Ensure order is [u1, u2, u3, u4, u5] AND Handle Deletion
+        # FIX: Ensure order is [u1, u2, u3, u4, u5, u6] AND Handle Deletion
         ordered_deletes = [d1, d2, d3, d4, d5, d6]
+        ordered_uploads = [u1, u2, u3, u4, u5, u6]
         
         # --- Drive Deletion Sync Logic ---
         drive_service = get_drive_service()
