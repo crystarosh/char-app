@@ -290,6 +290,40 @@ def delete_file_from_drive(service, filename, folder_id):
     except Exception as e:
         return False, str(e)
 
+    except Exception as e:
+        return False, str(e)
+
+def backup_char_images_to_drive(service, char_data, folder_id):
+    if not service or not char_data or not folder_id: return 0, 0, "Missing params"
+    
+    success_cnt = 0
+    fail_cnt = 0
+    err_msgs = []
+    
+    imgs = char_data.get('images', [])
+    for i, img_path in enumerate(imgs):
+        if not img_path: continue
+        
+        real_path = get_safe_image(img_path)
+        if real_path:
+            try:
+                # Load and Convert to JPG
+                img_obj = Image.open(real_path)
+                
+                # Naming: {id}_source_{i}.jpg
+                fname = f"{char_data['id']}_source_{i}.jpg"
+                
+                ok, msg = upload_image_to_drive(service, img_obj, folder_id, fname)
+                if ok: success_cnt += 1
+                else: 
+                    fail_cnt += 1
+                    err_msgs.append(f"Img{i}: {msg}")
+            except Exception as e:
+                fail_cnt += 1
+                err_msgs.append(f"Img{i}: {e}")
+                
+    return success_cnt, fail_cnt, "; ".join(err_msgs)
+
 # --- UI Functions (Placeholders) ---
 def render_register_page(manager, edit_char_id=None):
     title = "新規キャラクター登録"
@@ -724,12 +758,32 @@ def render_register_page(manager, edit_char_id=None):
         if edit_char_id:
             manager.update_character(edit_char_id, new_char)
             st.success("更新しました！")
+            
+            # AUTO BACKUP
+            drive_fid = st.secrets.get("drive_folder_id")
+            if drive_fid:
+                svc = get_drive_service()
+                if svc:
+                    sc, fc, em = backup_char_images_to_drive(svc, new_char, drive_fid)
+                    if sc > 0: st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                    if fc > 0: st.warning(f"バックアップ一部失敗: {em}")
+
             st.session_state.view_mode = 'detail'
             st.session_state.selected_char_id = edit_char_id
             st.session_state.editing_char_id = None 
         else:
             manager.add_character(new_char)
             st.success("登録しました！")
+            
+            # AUTO BACKUP
+            drive_fid = st.secrets.get("drive_folder_id")
+            if drive_fid:
+                svc = get_drive_service()
+                if svc:
+                    sc, fc, em = backup_char_images_to_drive(svc, new_char, drive_fid)
+                    if sc > 0: st.info(f"☁️ Drive自動バックアップ: {sc}枚")
+                    if fc > 0: st.warning(f"バックアップ一部失敗: {em}")
+
             st.session_state.view_mode = 'list'
             
         for k in list(st.session_state.keys()):
@@ -1143,8 +1197,6 @@ def render_list_page(manager):
             # Action Buttons at Bottom
             col_sns, col_edit = st.columns([2, 1])
             with col_sns:
-            col_sns, col_edit = st.columns([2, 1])
-            with col_sns:
                  # SNS Card Gen
                  if st.button("📱 SNS用カード画像を生成 (ZIP)"):
                     if verify_admin():
@@ -1155,7 +1207,7 @@ def render_list_page(manager):
 
                  st.divider()
                  
-                 # Source Image Backup UI
+                 # Source Image Backup UI (Manual Trigger)
                  with st.expander("☁️ 元画像のバックアップ (Google Drive)", expanded=False):
                      st.caption("現在登録されている Image 1 ~ 6 をGoogle Driveに保存します。")
                      
@@ -1175,40 +1227,18 @@ def render_list_page(manager):
                                     st.error("Drive接続失敗: secrets設定を確認してください")
                                 else:
                                     with st.spinner("バックアップ中..."):
-                                        success_cnt = 0
-                                        fail_cnt = 0
-                                        
-                                        imgs = char.get('images', [])
-                                        for i, img_path in enumerate(imgs):
-                                            if not img_path: continue
-                                            
-                                            real_path = get_safe_image(img_path)
-                                            if real_path:
-                                                try:
-                                                    # Load and Convert to JPG
-                                                    img_obj = Image.open(real_path)
-                                                    
-                                                    # Naming: {id}_source_{i}.jpg
-                                                    fname = f"{char['id']}_source_{i}.jpg"
-                                                    
-                                                    ok, msg = upload_image_to_drive(svc, img_obj, drive_folder_id, fname)
-                                                    if ok: success_cnt += 1
-                                                    else: 
-                                                        fail_cnt += 1
-                                                        st.error(f"Image {i+1} Err: {msg}")
-                                                except Exception as e:
-                                                    fail_cnt += 1
-                                                    st.error(f"Image {i+1} Load Err: {e}")
+                                        success_cnt, fail_cnt, err_msg = backup_char_images_to_drive(svc, char, drive_folder_id)
                                         
                                         if fail_cnt == 0 and success_cnt > 0:
                                             st.success(f"完了: {success_cnt}枚の画像をバックアップしました！")
                                         elif success_cnt > 0:
                                             st.warning(f"完了: {success_cnt}枚 成功 / {fail_cnt}枚 失敗")
+                                            if err_msg: st.error(err_msg)
                                         else:
-                                            if not imgs or all(not x for x in imgs):
+                                            if not char.get('images') or all(not x for x in char.get('images', [])):
                                                 st.info("画像が登録されていません")
                                             else:
-                                                st.error("バックアップに失敗しました")
+                                                st.error(f"バックアップに失敗しました: {err_msg}")
             
             with col_edit:
                 c_e1, c_e2 = st.columns(2)
