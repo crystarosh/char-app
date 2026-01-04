@@ -11,6 +11,10 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from PIL import Image, ImageDraw, ImageFont
 import re
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 def normalize_path(path):
     if not path: return None
@@ -221,6 +225,48 @@ def verify_admin():
     
     st.error("パスワードが間違っています。")
     return False
+
+# --- Google Drive Helpers ---
+def get_drive_service():
+    if "gcp_service_account" not in st.secrets:
+        return None
+    
+    try:
+        # Use existing secrets structure
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        # Fix private key if needed (same as Sheets logic)
+        if "\\n" in creds_dict["private_key"]:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            
+        SCOPES = ['https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        service = build('drive', 'v3', credentials=creds)
+        return service
+    except Exception as e:
+        print(f"Drive Auth Error: {e}")
+        return None
+
+def upload_image_to_drive(service, image_obj, folder_id, filename):
+    if not service or not image_obj: return False
+    
+    try:
+        # Convert PIL Image to Bytes
+        img_byte_arr = io.BytesIO()
+        image_obj.convert("RGB").save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
+        
+        file_metadata = {
+            'name': filename,
+            'parents': [folder_id]
+        }
+        media = MediaIoBaseUpload(img_byte_arr, mimetype='image/jpeg', resumable=True)
+        
+        file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        print(f"Uploaded File ID: {file.get('id')}")
+        return True
+    except Exception as e:
+        print(f"Upload Error: {e}")
+        return False
 
 # --- UI Functions (Placeholders) ---
 def render_register_page(manager, edit_char_id=None):
@@ -1059,11 +1105,29 @@ def render_list_page(manager):
             # Action Buttons at Bottom
             col_sns, col_edit = st.columns([2, 1])
             with col_sns:
+                 # Drive UI
+                 with st.expander("Google Drive設定", expanded=False):
+                     use_drive = st.checkbox("Google Driveにも保存", key=f"use_drive_{char['id']}")
+                     drive_folder_id = st.text_input("フォルダID", key=f"drive_fid_{char['id']}", help="Google DriveのURLの末尾などのID部分")
+                 
                  if st.button("📱 SNS用カード画像を生成 (ZIP)"):
                     if verify_admin():
-                        with st.spinner("生成中..."):
-                            zip_data = generate_card_zip(char, manager)
-                            st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
+                        drive_service = None
+                        if use_drive:
+                            if not drive_folder_id:
+                                st.error("フォルダIDを入力してください")
+                            else:
+                                drive_service = get_drive_service()
+                                if not drive_service:
+                                    st.error("Google Driveへの接続に失敗しました。Secrets設定を確認してください。")
+                        
+                        # Proceed if Drive is not strictly required OR if it succeeded
+                        if not use_drive or (use_drive and drive_service):
+                            with st.spinner("生成中..."):
+                                zip_data = generate_card_zip(char, manager, drive_service, drive_folder_id)
+                                st.download_button("ダウンロード", zip_data, f"{char['name']}.zip", "application/zip")
+                                if drive_service:
+                                    st.success(f"Google Driveへの保存が完了しました！ (Folder: {drive_folder_id})")
             
             with col_edit:
                 c_e1, c_e2 = st.columns(2)
@@ -1083,7 +1147,7 @@ def render_list_page(manager):
                             st.rerun()
 
 
-def generate_card_zip(char, manager):
+def generate_card_zip(char, manager, drive_service=None, drive_folder_id=None):
     import io
     import zipfile
     import os
@@ -1597,6 +1661,16 @@ def generate_card_zip(char, manager):
     i1 = create_card_1()
     i2 = create_card_2()
     i3 = create_card_3()
+    
+    # Drive Upload Logic
+    if drive_service and drive_folder_id:
+        safe_name = "".join([c for c in char['name'] if c.isalnum() or c in (' ','_','-')]).strip()
+        if not safe_name: safe_name = "char"
+        
+        # Upload 3 images
+        upload_image_to_drive(drive_service, i1, drive_folder_id, f"{safe_name}_profile.jpg")
+        upload_image_to_drive(drive_service, i2, drive_folder_id, f"{safe_name}_stats.jpg")
+        upload_image_to_drive(drive_service, i3, drive_folder_id, f"{safe_name}_gallery.jpg")
     
     b = io.BytesIO()
     with zipfile.ZipFile(b, "a", zipfile.ZIP_DEFLATED, False) as z:
