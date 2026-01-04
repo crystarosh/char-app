@@ -890,7 +890,7 @@ def render_list_page(manager):
                          target_img = get_safe_image(raw_img_path)
                          
                          if target_img:
-                             st.image(target_img, use_container_width=True)
+                             st.image(target_img, width='stretch')
                          else:
                              # Placeholder
                              st.markdown(f"""
@@ -1020,7 +1020,7 @@ def render_list_page(manager):
             # Main Image
             main_img_path = get_safe_image(char['images'][0] if (char['images'] and char['images'][0]) else None)
             if main_img_path:
-                st.image(main_img_path, use_container_width=True)
+                st.image(main_img_path, width='stretch')
             else:
                  st.info("画像が見つかりません (クラウド上では画像は一時ファイルのため消えることがあります)")
 
@@ -1037,7 +1037,7 @@ def render_list_page(manager):
                         # If we use `st.button` with image as label? No.
                         # We can use a button "🔍" under each image to open a modal-like view.
                         if img_path:
-                            st.image(img_path, use_container_width=True)
+                            st.image(img_path, width='stretch')
                             if st.button("拡大", key=f"view_{i}"):
                                 st.session_state.view_mode = 'image_view'
                                 st.session_state.view_img_path = img_path
